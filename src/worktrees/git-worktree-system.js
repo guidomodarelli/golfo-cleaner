@@ -51,13 +51,14 @@ function createIsolatedGitEnvironment() {
  * Runs git in a folder, hidden, bounded by a timeout and isolated from inherited repository variables.
  * @param {string} folderPath - Folder git runs in (`git -C`).
  * @param {string[]} gitArguments - Arguments after `-C <folder>`.
+ * @param {number} [timeoutMs] - Upper bound for the command; network commands pass a longer one.
  * @returns {Promise<string>} Standard output.
  */
-async function runGit(folderPath, gitArguments) {
+export async function runGit(folderPath, gitArguments, timeoutMs = GIT_COMMAND_TIMEOUT_MS) {
   const { stdout } = await execFileAsync("git", ["-C", folderPath, ...gitArguments], {
     env: createIsolatedGitEnvironment(),
     maxBuffer: GIT_COMMAND_MAX_BUFFER_BYTES,
-    timeout: GIT_COMMAND_TIMEOUT_MS,
+    timeout: timeoutMs,
     windowsHide: true,
   });
   return stdout;

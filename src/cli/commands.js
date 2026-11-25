@@ -4,7 +4,7 @@
  * Each cleanup is independent: a domain adds its own entry here and never depends on another domain's code.
  */
 import { cleanOrphanWebKitProcesses, playwrightCleanupApplies } from "../playwright/index.js";
-import { FORCE_FLAG, removeWorktrees, worktreesCleanupApplies } from "../worktrees/index.js";
+import { FORCE_FLAG, removeFinishedWorktrees, removeWorktrees, worktreesCleanupApplies } from "../worktrees/index.js";
 import { EXIT_CODE_CLEANUP_INCOMPLETE, EXIT_CODE_SUCCESS } from "./constants.js";
 
 /**
@@ -46,6 +46,14 @@ export const CLEANUP_COMMANDS = {
     async run({ dryRun, paths, flags, platform, log, warn }) {
       const result = await removeWorktrees({ paths, dryRun, force: flags.has(FORCE_FLAG), platform, log, warn });
       return result.refused.length + result.failed.length > 0 ? EXIT_CODE_CLEANUP_INCOMPLETE : EXIT_CODE_SUCCESS;
+    },
+  },
+  "finished-worktrees": {
+    description: "Cierra los worktrees del repo cuyo PR se mergeó o cerró, o cuyos commits ya están en main.",
+    appliesTo: worktreesCleanupApplies,
+    async run({ dryRun, platform, log, warn }) {
+      const { removal } = await removeFinishedWorktrees({ dryRun, platform, log, warn });
+      return removal.refused.length + removal.failed.length > 0 ? EXIT_CODE_CLEANUP_INCOMPLETE : EXIT_CODE_SUCCESS;
     },
   },
 };
