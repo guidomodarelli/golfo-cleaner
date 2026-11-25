@@ -77,3 +77,51 @@ export const REFUSAL_REASONS = {
   MISSING_DIRECTORY: "missing-directory",
   CONTAINS_SUBMODULES: "contains-submodules",
 };
+
+/**
+ * Time a worktree must stay idle (no new entry in its HEAD reflog) before the finished-worktrees cleanup closes it,
+ * so a session that is still working in it, even after its pull request merged, is not cut off.
+ */
+export const FINISHED_WORKTREE_GRACE_PERIOD_MS = 30 * 60 * 1000;
+
+/** Upper bound for `git fetch` and each `gh` call, which reach the network. */
+export const NETWORK_COMMAND_TIMEOUT_MS = 60_000;
+
+/** Pull requests asked to `gh` for each branch; a branch rarely has more than a couple. */
+export const PULL_REQUEST_LOOKUP_LIMIT = 20;
+
+/** Remote-tracking refs tried, in order, when `origin/HEAD` is not set. */
+export const DEFAULT_BRANCH_FALLBACK_REFS = ["origin/main", "origin/master"];
+
+/**
+ * Why a worktree counts as finished.
+ * @type {{ PULL_REQUEST_MERGED: "pull-request-merged", PULL_REQUEST_CLOSED: "pull-request-closed",
+ *   IN_DEFAULT_BRANCH: "in-default-branch" }}
+ */
+export const FINISHED_REASONS = {
+  PULL_REQUEST_MERGED: "pull-request-merged",
+  PULL_REQUEST_CLOSED: "pull-request-closed",
+  IN_DEFAULT_BRANCH: "in-default-branch",
+};
+
+/**
+ * Why a worktree does not count as finished yet.
+ * @type {{ MAIN_WORKTREE: "main-worktree", LOCKED: "locked", RECENTLY_ACTIVE: "recently-active",
+ *   ACTIVITY_UNKNOWN: "activity-unknown", OPEN_PULL_REQUEST: "open-pull-request", NO_OWN_COMMITS: "no-own-commits",
+ *   WORK_NOT_INTEGRATED: "work-not-integrated" }}
+ */
+export const UNFINISHED_REASONS = {
+  MAIN_WORKTREE: "main-worktree",
+  LOCKED: "locked",
+  RECENTLY_ACTIVE: "recently-active",
+  ACTIVITY_UNKNOWN: "activity-unknown",
+  OPEN_PULL_REQUEST: "open-pull-request",
+  NO_OWN_COMMITS: "no-own-commits",
+  WORK_NOT_INTEGRATED: "work-not-integrated",
+};
+
+/**
+ * States `gh` reports for a pull request.
+ * @type {{ OPEN: "OPEN", MERGED: "MERGED", CLOSED: "CLOSED" }}
+ */
+export const PULL_REQUEST_STATES = { OPEN: "OPEN", MERGED: "MERGED", CLOSED: "CLOSED" };

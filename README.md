@@ -6,6 +6,7 @@ Limpiezas del entorno de desarrollo, una por dominio. Cada limpieza es independi
 | --- | --- | --- | --- |
 | Procesos huérfanos de WebKit de Playwright | `@golfo/cleaner/playwright` | `cleaner playwright` | Windows |
 | Worktrees de git con rutas largas en `node_modules` | `@golfo/cleaner/worktrees` | `cleaner worktrees` | Todas |
+| Worktrees de git cuyo trabajo terminó | `@golfo/cleaner/worktrees` | `cleaner finished-worktrees` | Todas |
 
 ## Instalación
 
@@ -129,19 +130,66 @@ const result = await removeWorktrees({ paths: ["../app-feature"], dryRun: true }
 
 `decideWorktreeRemoval(input)` es la decisión pura: recibe lo que se sabe de la carpeta y devuelve `remove`, `remove-leftover` o `refuse` con el motivo.
 
+## Worktrees terminados: cerrarlos solos
+
+### Por qué existe
+
+Los agentes abren un worktree por tarea y lo dejan ahí cuando la tarea termina: el PR se mergea días después, o el trabajo se pushea directo a `main`, y nadie vuelve a borrar la carpeta. `cleaner finished-worktrees` encuentra esos worktrees y los cierra con la misma limpieza de `cleaner worktrees`.
+
+### Cuándo un worktree terminó
+
+Desde cualquier carpeta del repositorio, primero corre `git fetch --prune origin` (si falla, avisa y decide con lo que ya tiene) y después revisa cada worktree vinculado. Lo da por terminado cuando:
+
+- sus commits propios ya están en la rama por defecto del remoto (`origin/HEAD`, o si no `origin/main` u `origin/master`), lo que cubre un merge y un push directo; o
+- el PR más reciente de su rama, que consulta con `gh pr list`, se mergeó o se cerró, y el HEAD del worktree es el último commit del PR o uno anterior, así que todo su trabajo está en el PR.
+
+Lo conserva cuando:
+
+- es el worktree principal o está bloqueado;
+- tuvo actividad (una entrada nueva en el reflog de su HEAD) en los últimos 30 minutos, para no cortar una sesión que sigue trabajando ahí;
+- su rama tiene un PR abierto;
+- su HEAD no se movió desde que se creó, como uno recién abierto para una tarea nueva, aunque su rama ya tenga un PR mergeado o cerrado;
+- tiene commits que no están ni en la rama por defecto ni en un PR terminado;
+- no se pudo averiguar algo de lo anterior.
+
+Los terminados pasan por las mismas protecciones de `cleaner worktrees`: uno con cambios sin commitear (incluidos archivos sin seguimiento), con submódulos o que contiene la carpeta actual se conserva. **La rama y sus commits quedan**. No existe `--force` para esta limpieza.
+
+Un registro cuya carpeta ya no existe (`prunable` en `git worktree list`) no se evalúa: lo informa y sugiere `git worktree prune`.
+
+Si `gh` no está instalado o no tiene sesión, avisa una vez y solo cierra los worktrees cuyos commits ya están en la rama por defecto.
+
+### Desde la terminal
+
+```bash
+pnpm exec cleaner finished-worktrees --dry-run   # muestra qué cerraría y por qué conserva el resto
+pnpm exec cleaner finished-worktrees             # los cierra
+```
+
+### Desde código
+
+```js
+import { removeFinishedWorktrees, decideFinishedWorktree } from "@golfo/cleaner/worktrees";
+
+const result = await removeFinishedWorktrees({ repositoryPath: ".", dryRun: true });
+// { finished: [{ path, reason }], kept: [{ path, reason }], removal: { removedPaths, refused, failed } }
+```
+
+`decideFinishedWorktree(input)` es la decisión pura: recibe lo que se sabe del worktree y devuelve si terminó y por qué.
+
 ## CLI
 
 ```text
 cleaner <limpieza> [argumentos] [--dry-run]
 cleaner playwright [--dry-run]
 cleaner worktrees <ruta>... [--force] [--dry-run]
+cleaner finished-worktrees [--dry-run]
 cleaner --help
 ```
 
 | Código de salida | Significado |
 | --- | --- |
 | `0` | Terminó: limpió todo lo pedido, o la limpieza no aplica a la plataforma. La de Playwright siempre termina en `0`, aunque haya emitido avisos. |
-| `1` | La limpieza dejó algo sin limpiar: un worktree conservado por una protección o un borrado que falló. |
+| `1` | La limpieza dejó algo sin limpiar: un worktree conservado por una protección o un borrado que falló. En `finished-worktrees`, solo cuenta un worktree terminado que no se pudo borrar; los que siguen en uso no. |
 | `2` | Subcomando, opción o argumentos inválidos. |
 
 ## Agregar una limpieza

@@ -4,6 +4,10 @@ Todos los cambios relevantes de `@golfo/cleaner` se documentan en este archivo, 
 
 ## [Unreleased]
 
+### Added
+
+- Limpieza `finished-worktrees` (`cleaner finished-worktrees [--dry-run]` y `removeFinishedWorktrees` en `@golfo/cleaner/worktrees`): cierra los worktrees vinculados cuyo PR se mergeó o se cerró, o cuyos commits ya están en la rama por defecto del remoto. Conserva los que tuvieron actividad en los últimos 30 minutos, los que tienen un PR abierto, los que no tienen commits propios y los que tienen cambios sin commitear. La rama queda.
+
 ## [1.0.0] - 2026-10-19
 
 ### Changed

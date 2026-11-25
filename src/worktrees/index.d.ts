@@ -96,3 +96,104 @@ export declare function parseWorktreeList(porcelainOutput: string): WorktreeEntr
 export declare const gitWorktreeSystem: WorktreeSystem;
 export declare function removeWorktrees(options: WorktreeRemovalOptions): Promise<WorktreeRemovalResult>;
 export declare function worktreesCleanupApplies(): boolean;
+
+/** Why a worktree counts as finished. */
+export type FinishedReason = "pull-request-merged" | "pull-request-closed" | "in-default-branch";
+
+/** Why a worktree does not count as finished yet. */
+export type UnfinishedReason =
+  | "main-worktree"
+  | "locked"
+  | "recently-active"
+  | "activity-unknown"
+  | "open-pull-request"
+  | "no-own-commits"
+  | "work-not-integrated";
+
+/** Pull request of a worktree's branch, as the decision sees it. */
+export interface PullRequestSummary {
+  number: number;
+  state: "OPEN" | "MERGED" | "CLOSED";
+  /** Whether the worktree's HEAD is the pull request's last commit or an ancestor; `null` when unknown. */
+  containsHead: boolean | null;
+}
+
+/** What is known about a worktree to tell whether its work ended. */
+export interface FinishedWorktreeInput {
+  isMain: boolean;
+  locked: boolean;
+  head: string;
+  /** Oldest commit of the worktree's HEAD reflog, or `null` when empty. */
+  startCommit: string | null;
+  /** Time of the newest HEAD reflog entry, or `null` when unknown. */
+  lastActivityMs: number | null;
+  nowMs: number;
+  gracePeriodMs: number;
+  /** `null` when it could not be checked. */
+  headInDefaultBranch: boolean | null;
+  /** Newest first; `null` when they could not be read. */
+  pullRequests: PullRequestSummary[] | null;
+}
+
+/** Whether a worktree is finished, and why. */
+export type FinishedWorktreeDecision =
+  | { finished: true; reason: FinishedReason }
+  | { finished: false; reason: UnfinishedReason };
+
+/** Pull request as `gh pr list --json number,state,headRefOid` reports it. */
+export interface PullRequestRecord {
+  number: number;
+  state: "OPEN" | "MERGED" | "CLOSED";
+  headRefOid: string;
+}
+
+/** Git and GitHub access to tell whether a worktree's work ended. */
+export interface FinishedWorktreeSystem {
+  fetchRemote(mainWorktreePath: string): Promise<void>;
+  findDefaultBranchRef(mainWorktreePath: string): Promise<string | null>;
+  readHead(worktreePath: string): Promise<{ head: string; branch: string | null }>;
+  readHeadReflog(worktreePath: string): Promise<{ startCommit: string | null; lastActivityMs: number | null }>;
+  isAncestor(folderPath: string, ancestor: string, descendant: string): Promise<boolean>;
+  listPullRequests(mainWorktreePath: string, branch: string): Promise<PullRequestRecord[]>;
+}
+
+/** Outcome of closing the finished worktrees of a repository. */
+export interface FinishedWorktreesResult {
+  finished: { path: string; reason: FinishedReason }[];
+  kept: { path: string; reason: UnfinishedReason }[];
+  removal: WorktreeRemovalResult;
+}
+
+/** Repository whose finished worktrees to close, and how. */
+export interface FinishedWorktreesOptions {
+  /** Any folder of the repository; defaults to the current directory. */
+  repositoryPath?: string;
+  dryRun?: boolean;
+  gracePeriodMs?: number;
+  now?: () => number;
+  currentDirectory?: string;
+  platform?: string;
+  system?: WorktreeSystem;
+  finishedSystem?: FinishedWorktreeSystem;
+  log?: (message: string) => void;
+  warn?: (message: string) => void;
+}
+
+export declare const FINISHED_WORKTREE_GRACE_PERIOD_MS: number;
+export declare const FINISHED_REASONS: {
+  PULL_REQUEST_MERGED: "pull-request-merged";
+  PULL_REQUEST_CLOSED: "pull-request-closed";
+  IN_DEFAULT_BRANCH: "in-default-branch";
+};
+export declare const UNFINISHED_REASONS: {
+  MAIN_WORKTREE: "main-worktree";
+  LOCKED: "locked";
+  RECENTLY_ACTIVE: "recently-active";
+  ACTIVITY_UNKNOWN: "activity-unknown";
+  OPEN_PULL_REQUEST: "open-pull-request";
+  NO_OWN_COMMITS: "no-own-commits";
+  WORK_NOT_INTEGRATED: "work-not-integrated";
+};
+export declare function decideFinishedWorktree(input: FinishedWorktreeInput): FinishedWorktreeDecision;
+export declare const gitFinishedWorktreeSystem: FinishedWorktreeSystem;
+export declare function removeFinishedWorktrees(options?: FinishedWorktreesOptions): Promise<FinishedWorktreesResult>;

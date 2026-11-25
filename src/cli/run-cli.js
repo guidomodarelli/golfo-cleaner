@@ -22,7 +22,7 @@ import {
  */
 
 /** Width of the first column of the usage message. */
-const USAGE_COLUMN_WIDTH = 12;
+const USAGE_COLUMN_WIDTH = 20;
 
 /**
  * Builds the usage message from the available subcommands.
