@@ -112,7 +112,11 @@ export async function removeFinishedWorktrees({
   /** @type {import("./decide-worktree-removal.js").WorktreeEntry[]} */
   let worktrees;
   try {
-    worktrees = await system.listWorktrees(repositoryPath);
+    // Git prints forward slashes on Windows; the canonical path matches what the removal reports and compares.
+    worktrees = (await system.listWorktrees(repositoryPath)).map((worktree) => ({
+      ...worktree,
+      path: system.toCanonicalPath(worktree.path),
+    }));
   } catch (error) {
     warn(`${WORKTREES_LOG_PREFIX} listWorktrees failed in ${repositoryPath}: ${describeError(error)}.`);
     return result;
@@ -130,7 +134,12 @@ export async function removeFinishedWorktrees({
   let pullRequestLookupFailed = false;
 
   for (const worktree of linkedWorktrees) {
-    if (!system.folderExists(worktree.path)) continue;
+    if (!system.folderExists(worktree.path)) {
+      // A record without a folder holds no work; `git worktree prune` drops it, and the removal of a finished worktree
+      // runs that prune too.
+      log(`${WORKTREES_LOG_PREFIX} Skipped ${worktree.path}: its folder no longer exists; run \`git worktree prune\` to drop the record.`);
+      continue;
+    }
     let head;
     let branch;
     let startCommit;

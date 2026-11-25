@@ -154,6 +154,8 @@ Lo conserva cuando:
 
 Los terminados pasan por las mismas protecciones de `cleaner worktrees`: uno con cambios sin commitear (incluidos archivos sin seguimiento), con submódulos o que contiene la carpeta actual se conserva. **La rama y sus commits quedan**. No existe `--force` para esta limpieza.
 
+Un registro cuya carpeta ya no existe (`prunable` en `git worktree list`) no se evalúa: lo informa y sugiere `git worktree prune`.
+
 Si `gh` no está instalado o no tiene sesión, avisa una vez y solo cierra los worktrees cuyos commits ya están en la rama por defecto.
 
 ### Desde la terminal
