@@ -148,7 +148,7 @@ Lo conserva cuando:
 - es el worktree principal o está bloqueado;
 - tuvo actividad (una entrada nueva en el reflog de su HEAD) en los últimos 30 minutos, para no cortar una sesión que sigue trabajando ahí;
 - su rama tiene un PR abierto;
-- su HEAD no se movió desde que se creó, como uno recién abierto para una tarea nueva;
+- su HEAD no se movió desde que se creó, como uno recién abierto para una tarea nueva, aunque su rama ya tenga un PR mergeado o cerrado;
 - tiene commits que no están ni en la rama por defecto ni en un PR terminado;
 - no se pudo averiguar algo de lo anterior.
 

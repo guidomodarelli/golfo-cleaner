@@ -41,8 +41,8 @@ import { FINISHED_REASONS, PULL_REQUEST_STATES, UNFINISHED_REASONS } from "./con
  * commit of the worktree is in the remote default branch (a merge or a direct push), or when the newest pull request
  * of its branch was merged or closed and holds every commit of the worktree. Each guard errs on the side of keeping
  * it: the main and locked worktrees, a worktree touched within the grace period, one with an open pull request, one
- * whose HEAD never moved since it was created (a worktree just made for new work) and anything that could not be
- * checked. Uncommitted changes are guarded later, by the removal itself.
+ * whose HEAD never moved since it was created (a worktree just made for new work, even on a branch whose pull request
+ * already ended) and anything that could not be checked. Uncommitted changes are guarded later, by the removal itself.
  * @param {FinishedWorktreeInput} input - What is known about the worktree.
  * @returns {FinishedWorktreeDecision} Whether it is finished, and why.
  */
@@ -65,10 +65,11 @@ export function decideFinishedWorktree({
     return { finished: false, reason: UNFINISHED_REASONS.OPEN_PULL_REQUEST };
   }
 
-  // A worktree whose HEAD never moved points at a commit of the default branch from the start; that says nothing
-  // about its work being done.
+  // A worktree whose HEAD never moved starts at a commit that is already in the default branch or in its branch's
+  // pull request (checking out a branch whose pull request already ended); that says nothing about its work being done.
   const hasOwnCommits = startCommit !== null && startCommit !== head;
-  if (headInDefaultBranch && hasOwnCommits) return { finished: true, reason: FINISHED_REASONS.IN_DEFAULT_BRANCH };
+  if (!hasOwnCommits) return { finished: false, reason: UNFINISHED_REASONS.NO_OWN_COMMITS };
+  if (headInDefaultBranch) return { finished: true, reason: FINISHED_REASONS.IN_DEFAULT_BRANCH };
 
   const [newestPullRequest] = pullRequests ?? [];
   if (newestPullRequest?.containsHead) {
@@ -80,6 +81,5 @@ export function decideFinishedWorktree({
     }
   }
 
-  if (headInDefaultBranch) return { finished: false, reason: UNFINISHED_REASONS.NO_OWN_COMMITS };
   return { finished: false, reason: UNFINISHED_REASONS.WORK_NOT_INTEGRATED };
 }

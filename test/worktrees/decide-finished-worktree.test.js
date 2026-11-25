@@ -71,6 +71,29 @@ describe("decideFinishedWorktree", () => {
     );
   });
 
+  it("keeps a worktree whose HEAD never moved, even on a branch whose pull request was merged or closed", () => {
+    const checkedOutBranch = { ...IDLE_WORKTREE, startCommit: "head-commit" };
+    for (const state of [PULL_REQUEST_STATES.MERGED, PULL_REQUEST_STATES.CLOSED]) {
+      const pullRequests = [{ number: 7, state, containsHead: true }];
+      assert.deepEqual(decideFinishedWorktree({ ...checkedOutBranch, pullRequests }), {
+        finished: false,
+        reason: UNFINISHED_REASONS.NO_OWN_COMMITS,
+      });
+      assert.deepEqual(decideFinishedWorktree({ ...checkedOutBranch, headInDefaultBranch: true, pullRequests }), {
+        finished: false,
+        reason: UNFINISHED_REASONS.NO_OWN_COMMITS,
+      });
+    }
+  });
+
+  it("keeps a worktree whose start is unknown, as an empty HEAD reflog leaves it", () => {
+    const merged = { number: 7, state: PULL_REQUEST_STATES.MERGED, containsHead: true };
+    assert.deepEqual(decideFinishedWorktree({ ...IDLE_WORKTREE, startCommit: null, pullRequests: [merged] }), {
+      finished: false,
+      reason: UNFINISHED_REASONS.NO_OWN_COMMITS,
+    });
+  });
+
   it("keeps a worktree used within the grace period, even when its work is merged", () => {
     const recentlyUsed = { ...IDLE_WORKTREE, lastActivityMs: NOW_MS - 60_000, headInDefaultBranch: true };
     assert.deepEqual(decideFinishedWorktree(recentlyUsed), {
