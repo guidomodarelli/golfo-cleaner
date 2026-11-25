@@ -85,10 +85,35 @@ async function tryIsAncestor(finishedSystem, folderPath, ancestor, descendant) {
 }
 
 /**
+ * @typedef {object} InspectedHead
+ * @property {string} head - Commit of the worktree's HEAD when it was judged finished.
+ * @property {string | null} branch - Branch of that HEAD, or `null` when detached.
+ * @property {number | null} lastActivityMs - Time of the newest entry of its HEAD reflog then.
+ */
+
+/**
+ * Reads a worktree's HEAD and the newest activity of its reflog again, so a removal decided on an earlier reading
+ * keeps any worktree used since.
+ * @param {FinishedWorktreeSystem} finishedSystem - Git access.
+ * @param {string} worktreePath - Worktree folder.
+ * @param {InspectedHead} inspectedHead - What was read when the worktree was judged finished.
+ * @returns {Promise<"unchanged" | "changed">} Whether the HEAD, its branch or its activity moved.
+ */
+async function compareWithInspectedHead(finishedSystem, worktreePath, inspectedHead) {
+  const { head, branch } = await finishedSystem.readHead(worktreePath);
+  const { lastActivityMs } = await finishedSystem.readHeadReflog(worktreePath);
+  const unchanged =
+    head === inspectedHead.head && branch === inspectedHead.branch && lastActivityMs === inspectedHead.lastActivityMs;
+  return unchanged ? "unchanged" : "changed";
+}
+
+/**
  * Closes the linked worktrees of a repository whose work has ended: the newest pull request of their branch was
  * merged or closed and holds all their commits, or their commits reached the remote default branch (a direct push).
  * It first fetches `origin` so the answer is current, and asks `gh` for pull requests; when either fails it warns and
- * decides with what it knows, which only keeps more worktrees. The finished ones go through the regular removal, so a
+ * decides with what it knows, which only keeps more worktrees. Right before the removal each finished worktree's HEAD
+ * and reflog are read again, and one whose HEAD, branch or activity moved meanwhile is kept. The finished ones go
+ * through the regular removal, so a
  * worktree with uncommitted changes or the current directory is still kept. The branch and its commits stay. Never
  * throws.
  * @param {FinishedWorktreesOptions} [options] - Repository and how.
@@ -132,6 +157,8 @@ export async function removeFinishedWorktrees({
   }
   const defaultBranchRef = await finishedSystem.findDefaultBranchRef(mainWorktree.path);
   let pullRequestLookupFailed = false;
+  /** @type {Map<string, InspectedHead>} */
+  const inspectedHeadsByPath = new Map();
 
   for (const worktree of linkedWorktrees) {
     if (!system.folderExists(worktree.path)) {
@@ -193,12 +220,32 @@ export async function removeFinishedWorktrees({
     });
     if (decision.finished) {
       result.finished.push({ path: worktree.path, reason: decision.reason });
+      inspectedHeadsByPath.set(worktree.path, { head, branch, lastActivityMs });
       log(`${WORKTREES_LOG_PREFIX} ${worktree.path} is finished: ${FINISHED_EXPLANATIONS[decision.reason]}.`);
     } else {
       result.kept.push({ path: worktree.path, reason: decision.reason });
       log(`${WORKTREES_LOG_PREFIX} Kept ${worktree.path}: ${UNFINISHED_EXPLANATIONS[decision.reason]}.`);
     }
   }
+
+  // The pull request lookups and the other worktrees take time, during which a session may commit in a worktree already
+  // judged finished; its new HEAD belongs to no finished work, so each one is checked again right before the removal.
+  const stillFinished = [];
+  for (const finishedWorktree of result.finished) {
+    const inspectedHead = /** @type {InspectedHead} */ (inspectedHeadsByPath.get(finishedWorktree.path));
+    try {
+      if ((await compareWithInspectedHead(finishedSystem, finishedWorktree.path, inspectedHead)) === "unchanged") {
+        stillFinished.push(finishedWorktree);
+        continue;
+      }
+      result.kept.push({ path: finishedWorktree.path, reason: UNFINISHED_REASONS.RECENTLY_ACTIVE });
+      log(`${WORKTREES_LOG_PREFIX} Kept ${finishedWorktree.path}: its HEAD moved after it was judged finished, so ${UNFINISHED_EXPLANATIONS[UNFINISHED_REASONS.RECENTLY_ACTIVE]}.`);
+    } catch (error) {
+      warn(`${WORKTREES_LOG_PREFIX} readHead failed for ${finishedWorktree.path} before its removal: ${describeError(error)}. Kept it.`);
+      result.kept.push({ path: finishedWorktree.path, reason: UNFINISHED_REASONS.ACTIVITY_UNKNOWN });
+    }
+  }
+  result.finished = stillFinished;
 
   if (result.finished.length > 0) {
     result.removal = await removeWorktrees({

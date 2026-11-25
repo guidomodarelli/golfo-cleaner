@@ -133,6 +133,39 @@ describe("removeFinishedWorktrees with real git", () => {
     assert.match(await git(mainPath, ["branch", "--list", "merged-pr"]), /merged-pr/u);
   });
 
+  it("keeps a finished worktree whose HEAD moves while its pull requests are looked up", async () => {
+    const movingPath = await addWorktree("commits-during-lookup", "with-commit");
+    const mergedHead = (await git(movingPath, ["rev-parse", "HEAD"])).trim();
+    const output = createOutput();
+    const result = await removeFinishedWorktrees({
+      repositoryPath: mainPath,
+      currentDirectory: fixtureFolder,
+      now: () => LATER_MS,
+      finishedSystem: {
+        ...gitFinishedWorktreeSystem,
+        listPullRequests: async (_mainWorktreePath, branch) => {
+          if (branch !== "commits-during-lookup") return [];
+          // A session commits new work after the worktree's HEAD was read, while the lookup is still pending.
+          writeFileSync(path.join(movingPath, "new-work.txt"), "new work\n");
+          await git(movingPath, ["add", "new-work.txt"]);
+          await git(movingPath, ["commit", "-m", "new work"]);
+          return [{ number: 7, state: "MERGED", headRefOid: mergedHead }];
+        },
+      },
+      ...output,
+    });
+
+    assert.deepEqual(output.warnings.filter((message) => message.includes(movingPath)), []);
+    assert.equal(result.finished.some((worktree) => worktree.path === movingPath), false);
+    assert.deepEqual(
+      result.kept.find((worktree) => worktree.path === movingPath),
+      { path: movingPath, reason: UNFINISHED_REASONS.RECENTLY_ACTIVE },
+    );
+    assert.equal(result.removal.removedPaths.includes(movingPath), false);
+    assert.equal(existsSync(movingPath), true);
+    assert.match(await git(movingPath, ["log", "-1", "--format=%s"]), /new work/u);
+  });
+
   it("keeps a worktree used within the grace period", async () => {
     const recentPath = await addWorktree("recent-push", "with-commit");
     await git(recentPath, ["push", "origin", "HEAD:main"]);
